@@ -1,7 +1,7 @@
 import 'react-loader-spinner/dist/loader/css/react-spinner-loader.css';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import { ToastContainer } from 'react-toastify';
 import { fetchPictures } from './services/PicturesApi';
 import scrollPageDown from './helpers/scrollPageDown';
@@ -11,126 +11,103 @@ import Searchbar from './components/Searchbar';
 import ImageGallery from './components/ImageGallery';
 import Button from './components/Button';
 import Modal from './components/Modal';
+import NoResult from './components/NoResult';
 
-class App extends Component {
-    state = {
-        searchQuery: '',
-        page: 1,
-        images: [],
-        loading: false,
-        showModal: false,
-        largeImage: {},
-    };
+export default function App() {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [page, setPage] = useState(1);
+    const [images, setImages] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [largeImage, setLargeImage] = useState({});
+    const [error, setError] = useState(null);
 
-    componentDidUpdate(prevProps, prevState) {
-        const { searchQuery } = this.state;
-
-        if (searchQuery !== prevState.searchQuery) {
-            this.fetchImages()
-                .catch(error => console.log(error))
-                .finally(() => this.setState({ loading: false }));
+    useEffect(() => {
+        if (!searchQuery) {
+            return;
         }
-    }
+        const fetchGallery = async () => {
+            try {
+                const request = await fetchPictures(searchQuery, page);
+                if (request.length === 0) {
+                    return setError(
+                        `No results were found for ${searchQuery}!`,
+                    );
+                }
+                setImages(prev => [...prev, ...request]);
+            } catch (error) {
+                setError('Something went wrong. Try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchGallery();
+    }, [page, searchQuery]);
 
-    fetchImages = () => {
-        const { searchQuery, page } = this.state;
-
-        this.setState({ loading: true });
-
-        return fetchPictures(searchQuery, page).then(images => {
-            console.log(images);
-            this.setState(prevState => ({
-                images: [...prevState.images, ...images],
-                page: prevState.page + 1,
-            }));
-        });
+    const handlerFormSubmit = searchQuery => {
+        setSearchQuery(searchQuery);
+        setPage(1);
+        setImages([]);
+        setError(null);
+        setLoading(true);
     };
 
-    handlerFormSubmit = searchQuery =>
-        this.setState({ searchQuery, page: 1, images: [] });
-
-    handleOpenModal = largeImage => {
-        this.setState({ largeImage });
-        this.toggleModal();
+    const handleOpenModal = largeImage => {
+        setLargeImage(largeImage);
+        toggleModal();
     };
 
-    handleOnLoadClick = () => {
-        this.setState({ loading: true });
-        this.fetchImages()
-            .then(() => scrollPageDown())
-            .catch(error => console.log(error))
-            .finally(() => this.setState({ loading: false }));
+    const handleOnLoadClick = () => {
+        scrollPageDown();
+        setLoading(true);
+        setPage(prev => prev + 1);
     };
 
-    toggleModal = () =>
-        this.setState(({ showModal }) => ({ showModal: !showModal }));
+    const toggleModal = () => setShowModal(!showModal);
 
-    hideLoaderInModal = () => this.setState({ loading: false });
+    const hideLoaderInModal = () => setLoading(false);
 
-    render() {
-        const {
-            handlerFormSubmit,
-            handleOpenModal,
-            handleOnLoadClick,
-            toggleModal,
-            hideLoaderInModal,
-        } = this;
-        const { images, loading, showModal, largeImage } = this.state;
+    return (
+        <>
+            <ToastContainer autoClose={3000} />
 
-        return (
-            <>
-                <ToastContainer autoClose={3000} />
-                <Searchbar onSubmit={handlerFormSubmit} />
-                {loading && (
-                    <Loader
-                        className="spinner"
-                        type="Circles"
-                        color="#00BFFF"
-                        height={300}
-                        width={300}
-                    />
-                )}
-                {images.length !== 0 && (
-                    <ImageGallery
-                        images={images}
-                        onOpenModal={handleOpenModal}
-                    />
-                )}
-                {loading && !showModal && (
-                    <Loader
-                        className="spinner"
-                        type="Circles"
-                        color="#00BFFF"
-                        height={300}
-                        width={300}
-                    />
-                )}
+            <Searchbar onSubmit={handlerFormSubmit} />
+            {error && <NoResult text={error} />}
+            {loading && (
+                <Loader
+                    className="spinner"
+                    type="Circles"
+                    color="#00BFFF"
+                    height={300}
+                    width={300}
+                />
+            )}
+            {images.length > 0 && !error && (
+                <ImageGallery images={images} onOpenModal={handleOpenModal} />
+            )}
 
-                {!loading && images[0] && (
-                    <Button onClick={handleOnLoadClick} />
-                )}
+            {!loading && images.length > 0 && !error && (
+                <Button onClick={handleOnLoadClick} />
+            )}
 
-                {showModal && (
-                    <Modal onClose={toggleModal}>
-                        {loading && (
-                            <Loader
-                                className="spinner"
-                                type="Circles"
-                                color="#00BFFF"
-                                height={300}
-                                width={300}
-                            />
-                        )}
-                        <img
-                            src={largeImage.largeImageURL}
-                            alt={largeImage.tags}
-                            onLoad={hideLoaderInModal}
+            {showModal && (
+                <Modal onClose={toggleModal}>
+                    {loading && (
+                        <Loader
+                            className="spinner"
+                            type="Circles"
+                            color="#00BFFF"
+                            height={300}
+                            width={300}
                         />
-                    </Modal>
-                )}
-            </>
-        );
-    }
+                    )}
+                    <img
+                        src={largeImage.largeImageURL}
+                        alt={largeImage.tags}
+                        onLoad={hideLoaderInModal}
+                    />
+                </Modal>
+            )}
+        </>
+    );
 }
-
-export default App;
